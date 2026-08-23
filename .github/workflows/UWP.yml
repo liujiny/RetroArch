@@ -1,9 +1,11 @@
 name: UWP
 
 on:
-  schedule:
-    - cron: '0 0 * * 1'
   workflow_dispatch:
+
+concurrency:
+  group: uwp-build
+  cancel-in-progress: true
 
 env:
   CL: /D_SILENCE_EXPERIMENTAL_COROUTINE_DEPRECATION_WARNINGS
