@@ -74,7 +74,6 @@ jobs:
           fetch-depth: 0
           submodules: false
           token: ${{ secrets.WORKFLOW_PAT }}
-          token: ${{ secrets.WORKFLOW_PAT }}
 
       - name: Download Dependency Files
         shell: pwsh
