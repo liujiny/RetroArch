@@ -12,29 +12,7 @@ env:
 permissions:
   contents: write
 jobs:
-  SyncUpstream:
-    runs-on: ubuntu-latest
-    permissions:
-      contents: write
-    steps:
-      - name: Checkout master
-        uses: actions/checkout@v4
-        with:
-          ref: master
-          fetch-depth: 0
-          token: ${{ secrets.WORKFLOW_PAT }}
-
-      - name: Sync with Upstream
-        uses: aormsby/Fork-Sync-With-Upstream-action@v3.4.1
-        with:
-          target_sync_branch: master
-          target_repo_token: ${{ secrets.WORKFLOW_PAT }}
-          upstream_sync_branch: master
-          upstream_sync_repo: libretro/RetroArch
-          test_mode: false
-
   Build:
-    needs: SyncUpstream
     runs-on: windows-latest
     strategy:
       fail-fast: false
