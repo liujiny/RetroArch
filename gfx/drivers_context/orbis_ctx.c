@@ -74,7 +74,7 @@ static enum gfx_ctx_api ctx_orbis_api = GFX_CTX_OPENGL_API;
 
 /* TODO/FIXME - global reference */
 extern bool platform_orbis_has_focus;
-extern SceKernelModule s_piglet_module;
+extern int s_piglet_module;
 
 void orbis_ctx_destroy(void *data)
 {

@@ -83,8 +83,8 @@
 #define MODULE_PATH_EXT "/app0/sce_module/"
 
 static char eboot_path[512] = {0};
-SceKernelModule s_piglet_module = -1;
-SceKernelModule s_shacc_module  = -1;
+int s_piglet_module = -1;
+int s_shacc_module  = -1;
 static bool orbis_runtime_initialized;
 
 static enum frontend_fork orbis_fork_mode = FRONTEND_FORK_NONE;
@@ -92,13 +92,16 @@ static enum frontend_fork orbis_fork_mode = FRONTEND_FORK_NONE;
 int rarch_main(int argc, char *argv[], void *data);
 void main_exit(void *args);
 
-static SceKernelModule frontend_orbis_load_module(
+static int frontend_orbis_load_module(
       const char *directory, const char *name)
 {
    char path[PATH_MAX_LENGTH];
+   const char *separator = "/";
    int start_result = 0;
 
-   snprintf(path, sizeof(path), "%s/%s.sprx", directory, name);
+   if (directory[0] && directory[strlen(directory) - 1] == '/')
+      separator = "";
+   snprintf(path, sizeof(path), "%s%s%s.sprx", directory, separator, name);
    return sceKernelLoadStartModule(path, 0, NULL, 0, NULL, &start_result);
 }
 
