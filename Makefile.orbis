@@ -30,6 +30,8 @@ endif
 
 ifeq ($(HAVE_STATIC_DUMMY),1)
   DEFINES += -DHAVE_STATIC_DUMMY
+else
+  DEFINES += -DHAVE_ORBIS_STATIC_CORE
 endif
 
 ifeq ($(GRIFFIN_BUILD), 1)

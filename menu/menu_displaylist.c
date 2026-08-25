@@ -1952,6 +1952,26 @@ static unsigned menu_displaylist_parse_supported_cores(
       }
    }
 
+#if defined(HAVE_ORBIS_STATIC_CORE)
+   /* Orbis single-core builds link libretro into the executable and
+    * intentionally have no dynamic core file or core-info entry to
+    * enumerate. Expose the built-in core through the existing direct-load
+    * action; selecting it sets CORE_TYPE_PLAIN before content_load(), which
+    * binds the statically linked retro_* entry points. */
+   if (   !core_available
+       && menu_entries_append(info->list,
+            "builtin_mame2003_plus",
+            msg_hash_to_str(current_core_enum_label),
+            current_core_enum_label,
+            FILE_TYPE_DIRECT_LOAD, 0, 0, NULL))
+   {
+      file_list_set_alt_at_offset(info->list, 0,
+            "MAME 2003-Plus (Built-in)");
+      core_available = true;
+      count++;
+   }
+#endif
+
    /* Fallback */
    if (!core_available)
    {
