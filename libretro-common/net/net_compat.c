@@ -29,6 +29,39 @@
 
 #include <net/net_compat.h>
 
+#if defined(ORBIS)
+int sceNetResolverCreate(const char *name, void *mem, int flags);
+int sceNetResolverStartNtoa(int resolver, const char *hostname,
+      struct in_addr *address, int timeout, int retries, int flags);
+int sceNetResolverDestroy(int resolver);
+
+/* Orbis exposes DNS through libSceNet rather than libc. */
+struct hostent *gethostbyname(const char *name)
+{
+   static struct hostent result;
+   static struct in_addr address;
+   static char *addresses[2];
+   int resolver = sceNetResolverCreate("retroarch", NULL, 0);
+   int ret;
+
+   if (resolver < 0)
+      return NULL;
+   ret = sceNetResolverStartNtoa(resolver, name, &address, 0, 0, 0);
+   sceNetResolverDestroy(resolver);
+   if (ret < 0)
+      return NULL;
+
+   addresses[0]       = (char*)&address;
+   addresses[1]       = NULL;
+   result.h_name      = (char*)name;
+   result.h_aliases   = NULL;
+   result.h_addrtype  = AF_INET;
+   result.h_length    = sizeof(address);
+   result.h_addr_list = addresses;
+   return &result;
+}
+#endif
+
 #if defined(_WIN32) && !defined(_XBOX)
 #if !defined(_WIN32_WINNT) || _WIN32_WINNT < 0x0600
 const char *inet_ntop(int af, const void *src, char *dst, socklen_t size)

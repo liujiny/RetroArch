@@ -811,7 +811,7 @@
 #endif
 
 #define DEFAULT_MENU_SHOW_ONLINE_UPDATER true
-#if defined(HAVE_LAKKA) || defined(VITA)
+#if defined(HAVE_LAKKA) || defined(VITA) || defined(ORBIS)
 #define DEFAULT_MENU_SHOW_CORE_UPDATER false
 #else
 #define DEFAULT_MENU_SHOW_CORE_UPDATER true

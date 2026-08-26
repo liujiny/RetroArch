@@ -63,7 +63,7 @@ else
 	HAVE_OPENGL  					:= 1
 	HAVE_OPENGLES  				:= 1
 	HAVE_OPENGLES2  			:= 1
-	HAVE_NETWORKING				:= 0
+	HAVE_NETWORKING				:= 1
 	HAVE_IFINFO				:= 0
 	HAVE_SOCKET_LEGACY		:= 1
 	HAVE_MENU							:= 1

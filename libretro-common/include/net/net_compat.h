@@ -259,7 +259,7 @@ RETRO_BEGIN_DECLS
 #define NI_NAMEREQD    8
 #define NI_DGRAM       16
 
-#ifndef __PS3__
+#if !defined(__PS3__) && !defined(ORBIS)
 struct addrinfo
 {
    int ai_flags;

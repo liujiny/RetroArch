@@ -15739,7 +15739,13 @@ static bool menu_displaylist_ctl_internal(
 
 #ifdef HAVE_COMPRESSION
 #ifdef HAVE_UPDATE_CORE_INFO
-               if (settings->bools.menu_show_core_updater)
+               /* Static PS4 builds cannot install dynamic cores, but core info
+                * remains frontend data and must stay independently updatable. */
+               if (settings->bools.menu_show_core_updater
+#if defined(ORBIS)
+                     || true
+#endif
+                  )
                {
                   if (menu_entries_append(info->list,
                            msg_hash_to_str(MENU_ENUM_LABEL_VALUE_UPDATE_CORE_INFO_FILES),
