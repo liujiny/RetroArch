@@ -2849,26 +2849,6 @@ static int action_ok_file_load(const char *path,
    if (menu_label && *menu_label)
       setting = menu_setting_find(menu_label);
 
-#if defined(HAVE_ORBIS_STATIC_CORE)
-   /* The built-in Orbis core is a menu sentinel, not a filesystem path.
-    * Route it through the static-core fork path while retaining the
-    * content path represented by the current menu stack. */
-   if (   type == FILE_TYPE_DIRECT_LOAD
-       && string_is_equal(path, "builtin_mame2003_plus"))
-   {
-      content_ctx_info_t content_info = {0};
-
-      if (!menu_path || !*menu_path)
-         return -1;
-      if (!task_push_load_content_with_new_core_from_menu(
-               path, menu_path, &content_info,
-               CORE_TYPE_PLAIN, NULL, NULL))
-         return -1;
-      menu_driver_set_last_start_content(menu_st, menu_path);
-      return 0;
-   }
-#endif
-
    if (setting && setting->type == ST_PATH)
       return action_ok_set_path(path, label, type, idx, entry_idx);
 
