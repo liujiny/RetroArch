@@ -87,6 +87,10 @@ int s_piglet_module = -1;
 int s_shacc_module  = -1;
 static bool orbis_runtime_initialized;
 
+int sceKernelDebugOutText(int channel, const char *text);
+int sceNetInit(void);
+int sceNetCtlInit(void);
+
 static enum frontend_fork orbis_fork_mode = FRONTEND_FORK_NONE;
 
 int rarch_main(int argc, char *argv[], void *data);
@@ -114,7 +118,9 @@ static bool frontend_orbis_init_runtime(void)
       "libSceSystemService",
       "libSceUserService",
       "libSceAudioOut",
-      "libScePad"
+      "libScePad",
+      "libSceNet",
+      "libSceNetCtl"
    };
    const char *sandbox_word;
    char module_path[PATH_MAX_LENGTH];
@@ -128,7 +134,15 @@ static bool frontend_orbis_init_runtime(void)
          sandbox_word ? sandbox_word : "system");
 
    for (i = 0; i < sizeof(required_modules) / sizeof(required_modules[0]); i++)
-      frontend_orbis_load_module(module_path, required_modules[i]);
+   {
+      int module_result = frontend_orbis_load_module(
+            module_path, required_modules[i]);
+      char message[192];
+      snprintf(message, sizeof(message),
+            "[PS4 NET] load %s result=0x%08x\n",
+            required_modules[i], module_result);
+      sceKernelDebugOutText(0, message);
+   }
 
    s_piglet_module = frontend_orbis_load_module(
          MODULE_PATH, "libScePigletv2VSH");
@@ -148,6 +162,18 @@ static bool frontend_orbis_init_runtime(void)
 
    if (sceUserServiceInitialize(NULL) < 0)
       return false;
+
+   {
+      int net_result = sceNetInit();
+      int netctl_result = sceNetCtlInit();
+      char message[192];
+      snprintf(message, sizeof(message),
+            "[PS4 NET] sceNetInit=0x%08x sceNetCtlInit=0x%08x\n",
+            net_result, netctl_result);
+      sceKernelDebugOutText(0, message);
+      if (net_result < 0 || netctl_result < 0)
+         return false;
+   }
 
    sceSystemServiceHideSplashScreen();
    orbis_runtime_initialized = true;
