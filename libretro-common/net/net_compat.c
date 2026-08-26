@@ -30,10 +30,29 @@
 #include <net/net_compat.h>
 
 #if defined(ORBIS)
-int sceNetResolverCreate(const char *name, void *mem, int flags);
+int sceNetResolverCreate(const char *name, int memid, int flags);
 int sceNetResolverStartNtoa(int resolver, const char *hostname,
       struct in_addr *address, int timeout, int retries, int flags);
 int sceNetResolverDestroy(int resolver);
+int sceKernelDebugOutText(int channel, const char *text);
+
+static void orbis_resolver_log(const char *name, int resolver,
+      int resolve_ret, int destroy_ret, const struct in_addr *address)
+{
+   static unsigned log_count;
+   char message[384];
+
+   if (log_count++ >= 16)
+      return;
+
+   snprintf(message, sizeof(message),
+         "[PS4 DNS] host=%s resolver=0x%08x start=0x%08x "
+         "destroy=0x%08x timeout=2 retry=3 address=0x%08x\n",
+         name ? name : "<null>", (unsigned)resolver,
+         (unsigned)resolve_ret, (unsigned)destroy_ret,
+         address ? (unsigned)address->s_addr : 0);
+   sceKernelDebugOutText(0, message);
+}
 
 /* Orbis exposes DNS through libSceNet rather than libc. */
 struct hostent *gethostbyname(const char *name)
@@ -41,13 +60,20 @@ struct hostent *gethostbyname(const char *name)
    static struct hostent result;
    static struct in_addr address;
    static char *addresses[2];
-   int resolver = sceNetResolverCreate("retroarch", NULL, 0);
-   int ret;
+   int resolver = sceNetResolverCreate("retroarch", 0, 0);
+   int ret       = -1;
+   int destroy_ret;
 
    if (resolver < 0)
+   {
+      orbis_resolver_log(name, resolver, ret, 0, NULL);
       return NULL;
-   ret = sceNetResolverStartNtoa(resolver, name, &address, 0, 0, 0);
-   sceNetResolverDestroy(resolver);
+   }
+
+   address.s_addr = 0;
+   ret = sceNetResolverStartNtoa(resolver, name, &address, 2, 3, 0);
+   destroy_ret = sceNetResolverDestroy(resolver);
+   orbis_resolver_log(name, resolver, ret, destroy_ret, &address);
    if (ret < 0)
       return NULL;
 
