@@ -1963,7 +1963,7 @@ static unsigned menu_displaylist_parse_supported_cores(
             "builtin_mame2003_plus",
             msg_hash_to_str(current_core_enum_label),
             current_core_enum_label,
-            FILE_TYPE_DIRECT_LOAD, 0, 0, NULL))
+            FILE_TYPE_CORE, 0, 0, NULL))
    {
       file_list_set_alt_at_offset(info->list, 0,
             "MAME 2003-Plus (Built-in)");

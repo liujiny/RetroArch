@@ -2878,6 +2878,16 @@ bool task_push_load_content_with_new_core_from_menu(
    settings_t *settings                       = config_get_ptr();
    runloop_state_t *runloop_st                = runloop_state_get_ptr();
 #ifndef HAVE_DYNAMIC
+   if (string_is_equal(core_path, "builtin_mame2003_plus"))
+   {
+      path_set(RARCH_PATH_CORE, core_path);
+      path_set(RARCH_PATH_CONTENT, fullpath);
+      if (!frontend_driver_set_fork(FRONTEND_FORK_CORE))
+         return false;
+      runloop_set_current_core_type(type, true);
+      return true;
+   }
+
    bool force_core_reload                     = settings->bools.always_reload_core_on_run_content;
    /* Check whether specified core is already loaded
     * > If so, we can skip loading the core and

@@ -2422,6 +2422,17 @@ static int generic_action_ok(const char *path,
 
             flush_type = MENU_SETTINGS;
 
+#if defined(HAVE_ORBIS_STATIC_CORE)
+            if (string_is_equal(path, "builtin_mame2003_plus"))
+            {
+               if (!task_push_load_content_with_new_core_from_menu(
+                        path, menu_path, &content_info,
+                        CORE_TYPE_PLAIN, NULL, NULL))
+                  ret = -1;
+               break;
+            }
+#endif
+
             if (!task_push_load_new_core(
                      action_path, NULL,
                      &content_info,
