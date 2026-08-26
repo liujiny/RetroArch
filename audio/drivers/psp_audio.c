@@ -16,6 +16,7 @@
  */
 
 #include <stdint.h>
+#include <stdarg.h>
 #if defined(VITA) || defined(PSP)
 #include <malloc.h>
 #endif
@@ -49,6 +50,20 @@ int sceUserServiceGetLoginUserIdList(
 #endif
 
 #include "../audio_driver.h"
+
+#if defined(ORBIS)
+int sceKernelDebugOutText(int channel, const char *text);
+
+static void psp_audio_klogf(const char *format, ...)
+{
+   char message[512];
+   va_list args;
+   va_start(args, format);
+   vsnprintf(message, sizeof(message), format, args);
+   va_end(args);
+   sceKernelDebugOutText(0, message);
+}
+#endif
 
 typedef struct psp_audio
 {
@@ -97,9 +112,8 @@ static int psp_configure_audio(unsigned rate, int *user_id)
             break;
          }
 
-   printf("[PS4 AUDIO] login-users result=0x%08x userId=0x%08x\n",
+   psp_audio_klogf("[PS4 AUDIO] login-users result=0x%08x userId=0x%08x\n",
          result, *user_id);
-   fflush(stdout);
    if (*user_id == SCE_USER_SERVICE_USER_ID_INVALID)
       return -1;
 
@@ -145,11 +159,10 @@ static void psp_audio_mainloop(void *data)
               : (psp->buffer + read_pos_2));
 #if defined(ORBIS)
          static unsigned output_logs;
-         if (output_logs++ < 4)
+         if (output_logs++ < 10)
          {
-            printf("[PS4 AUDIO] output[%u] handle=%d silence=%d result=0x%08x\n",
-                  output_logs, psp->port, cond, output_result);
-            fflush(stdout);
+            psp_audio_klogf("[PS4 AUDIO] output[%u] handle=%d frames=%u silence=%d result=0x%08x\n",
+                  output_logs, psp->port, AUDIO_OUT_COUNT, cond, output_result);
          }
 #endif
       }
@@ -181,10 +194,9 @@ static void *psp_audio_init(const char *device,
 
 #if defined(ORBIS)
    init_result = sceAudioOutInit();
-   printf("[PS4 AUDIO] init result=0x%08x rate=%u format=stereo_s16 "
+   psp_audio_klogf("[PS4 AUDIO] psp_audio_init entered; init result=0x%08x rate=%u channels=2 format=stereo_s16 "
          "frames=%u latency=%u block_frames=%u\n", init_result, rate,
          AUDIO_OUT_COUNT, latency, block_frames);
-   fflush(stdout);
    if (init_result < 0)
    {
       free(psp);
@@ -201,20 +213,18 @@ static void *psp_audio_init(const char *device,
                )) < 0)
    {
 #if defined(ORBIS)
-      printf("[PS4 AUDIO] open FAILED userId=0x%08x port=MAIN "
+      psp_audio_klogf("[PS4 AUDIO] open userId=0x%08x port=MAIN "
             "index=0 frames=%u rate=%u format=stereo_s16 result=0x%08x\n",
             user_id, AUDIO_OUT_COUNT, rate, port);
-      fflush(stdout);
 #endif
       free(psp);
       return NULL;
    }
 
 #if defined(ORBIS)
-   printf("[PS4 AUDIO] open OK userId=0x%08x handle=%d port=MAIN "
+   psp_audio_klogf("[PS4 AUDIO] open userId=0x%08x handle=%d error=0x%08x port=MAIN "
          "index=0 frames=%u rate=%u format=stereo_s16\n", user_id, port,
-         AUDIO_OUT_COUNT, rate);
-   fflush(stdout);
+         port < 0 ? port : 0, AUDIO_OUT_COUNT, rate);
 #endif
    /* Cache aligned, not necessary but helpful. */
    psp->buffer        = (uint32_t*)malloc(AUDIO_BUFFER_SIZE * sizeof(uint32_t));

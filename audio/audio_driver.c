@@ -20,6 +20,8 @@
 
 #include <math.h>
 #include <memalign.h>
+#include <stdarg.h>
+#include <stdio.h>
 
 #if defined(__SSE__)
 #include <xmmintrin.h>
@@ -147,6 +149,20 @@ audio_driver_t audio_null = {
    NULL, /* buffer_size */
    NULL  /* write_raw */
 };
+
+#if defined(ORBIS)
+int sceKernelDebugOutText(int channel, const char *text);
+
+static void ps4_audio_klogf(const char *format, ...)
+{
+   char message[512];
+   va_list args;
+   va_start(args, format);
+   vsnprintf(message, sizeof(message), format, args);
+   va_end(args);
+   sceKernelDebugOutText(0, message);
+}
+#endif
 
 audio_driver_t *audio_drivers[] = {
 #ifdef HAVE_ALSA
@@ -515,6 +531,13 @@ bool audio_driver_find_driver(const char *audio_drv,
          return false;
       audio_driver_st.current_audio = tmp;
    }
+
+#if defined(ORBIS)
+   ps4_audio_klogf("[PS4 AUDIO] configured audio_driver=%s selected=%s index=%d\n",
+         (audio_drv && *audio_drv) ? audio_drv : "<empty>",
+         (audio_driver_st.current_audio && audio_driver_st.current_audio->ident)
+               ? audio_driver_st.current_audio->ident : "<null>", i);
+#endif
 
    return true;
 }
@@ -2048,13 +2071,22 @@ size_t audio_driver_sample_batch(const int16_t *data, size_t frames)
 #if defined(ORBIS)
    static unsigned ps4_batch_calls;
    static uint64_t ps4_batch_frames;
-   if (ps4_batch_calls < 4)
+   if (ps4_batch_calls < 10)
    {
+      bool all_zero = true;
+      size_t i;
+      for (i = 0; data && i < frames * 2; i++)
+         if (data[i] != 0)
+         {
+            all_zero = false;
+            break;
+         }
+      if (!data)
+         all_zero = false;
       ps4_batch_frames += frames;
-      printf("[PS4 AUDIO] libretro batch[%u] frames=%zu cumulative=%llu data=%p\n",
+      ps4_audio_klogf("[PS4 AUDIO] libretro batch[%u] frames=%zu cumulative=%llu all_zero=%d data=%p\n",
             ps4_batch_calls + 1, frames,
-            (unsigned long long)ps4_batch_frames, (const void*)data);
-      fflush(stdout);
+            (unsigned long long)ps4_batch_frames, all_zero, (const void*)data);
       ps4_batch_calls++;
    }
 #endif
