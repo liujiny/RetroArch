@@ -16,6 +16,8 @@
 
 #include <stdint.h>
 #include <stdlib.h>
+#include <stdio.h>
+#include <string.h>
 
 #ifdef HAVE_CONFIG_H
 #include "../../config.h"
@@ -35,6 +37,13 @@ typedef struct ps4_input
    const input_device_driver_t *joypad;
 } ps4_input_t;
 
+int sceKernelDebugOutText(int channel, const char *text);
+
+static void ps4_input_klog(const char *text)
+{
+   sceKernelDebugOutText(0, text);
+}
+
 int16_t ps4_input_state(void *data,
          const input_device_driver_t *joypad_data,
          const input_device_driver_t *sec_joypad_data,
@@ -44,6 +53,17 @@ int16_t ps4_input_state(void *data,
          unsigned port, unsigned device, unsigned index, unsigned id)
 {
    ps4_input_t *ps4           = (ps4_input_t*)data;
+   static bool logged_invalid_driver;
+
+   if (!ps4 || !ps4->joypad || !ps4->joypad->button || !ps4->joypad->axis)
+   {
+      if (!logged_invalid_driver)
+      {
+         ps4_input_klog("[PS4 INPUT] state disabled: joypad/button/axis is NULL\n");
+         logged_invalid_driver = true;
+      }
+      return 0;
+   }
 
    switch (device)
    {
@@ -113,10 +133,41 @@ static void ps4_input_free_input(void *data)
 static void* ps4_input_initialize(const char *joypad_driver) 
 {
    ps4_input_t *ps4 = (ps4_input_t*)calloc(1, sizeof(*ps4));
+   char message[512];
+   size_t offset;
+   unsigned i;
+
    if (!ps4)
       return NULL;
 
+   snprintf(message, sizeof(message),
+         "[PS4 INPUT] requested joypad_driver=%s; compiled=",
+         (joypad_driver && *joypad_driver) ? joypad_driver : "<empty>");
+   offset = strlen(message);
+   for (i = 0; joypad_drivers[i] && offset < sizeof(message); i++)
+      offset += snprintf(message + offset, sizeof(message) - offset,
+            "%s%s", i ? "," : "", joypad_drivers[i]->ident);
+   snprintf(message + ((offset < sizeof(message)) ? offset : sizeof(message) - 1),
+         (offset < sizeof(message)) ? sizeof(message) - offset : 1, "\n");
+   ps4_input_klog(message);
+
    ps4->joypad = input_joypad_init_driver(joypad_driver, ps4);
+   if (!ps4->joypad)
+   {
+      snprintf(message, sizeof(message),
+            "[PS4 INPUT] ERROR joypad initialization failed requested=%s\n",
+            (joypad_driver && *joypad_driver) ? joypad_driver : "<empty>");
+      ps4_input_klog(message);
+      free(ps4);
+      return NULL;
+   }
+
+   snprintf(message, sizeof(message),
+         "[PS4 INPUT] initialized requested=%s matched=%s button=%p axis=%p\n",
+         (joypad_driver && *joypad_driver) ? joypad_driver : "<empty>",
+         ps4->joypad->ident ? ps4->joypad->ident : "<null>",
+         (void*)ps4->joypad->button, (void*)ps4->joypad->axis);
+   ps4_input_klog(message);
    return ps4; 
 }
 static void ps4_input_poll(void *data)
