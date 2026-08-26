@@ -48,7 +48,7 @@ static void orbis_resolver_log(const char *name, int resolver,
 
    snprintf(message, sizeof(message),
          "[PS4 DNS] host=%s resolver=0x%08x start=0x%08x "
-         "destroy=0x%08x timeout=2 retry=3 address=0x%08x\n",
+         "destroy=0x%08x timeout_us=5000000 retry=3 address=0x%08x\n",
          name ? name : "<null>", (unsigned)resolver,
          (unsigned)resolve_ret, (unsigned)destroy_ret,
          address ? (unsigned)address->s_addr : 0);
@@ -73,7 +73,7 @@ struct hostent *gethostbyname(const char *name)
    }
 
    address.s_addr = 0;
-   ret = sceNetResolverStartNtoa(resolver, name, &address, 2, 3, 0);
+   ret = sceNetResolverStartNtoa(resolver, name, &address, 5000000, 3, 0);
    destroy_ret = sceNetResolverDestroy(resolver);
    orbis_resolver_log(name, resolver, ret, destroy_ret, &address);
    if (ret < 0)
