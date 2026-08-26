@@ -2045,6 +2045,19 @@ void audio_driver_sample(int16_t left, int16_t right)
 
 size_t audio_driver_sample_batch(const int16_t *data, size_t frames)
 {
+#if defined(ORBIS)
+   static unsigned ps4_batch_calls;
+   static uint64_t ps4_batch_frames;
+   if (ps4_batch_calls < 4)
+   {
+      ps4_batch_frames += frames;
+      printf("[PS4 AUDIO] libretro batch[%u] frames=%zu cumulative=%llu data=%p\n",
+            ps4_batch_calls + 1, frames,
+            (unsigned long long)ps4_batch_frames, (const void*)data);
+      fflush(stdout);
+      ps4_batch_calls++;
+   }
+#endif
    uint32_t runloop_flags;
    bool recording_push_audio      = false;
    bool flush_audio               = false;

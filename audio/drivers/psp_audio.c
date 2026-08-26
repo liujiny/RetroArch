@@ -35,8 +35,17 @@
 #include <pspaudio.h>
 #elif defined(ORBIS)
 #include <libSceAudioOut.h>
+#include <libSceUserService.h>
 #include <defines/ps4_defines.h>
 #include <verbosity.h>
+
+typedef struct SceUserServiceLoginUserIdList
+{
+   int32_t userId[SCE_USER_SERVICE_MAX_LOGIN_USERS];
+} SceUserServiceLoginUserIdList;
+
+int sceUserServiceGetLoginUserIdList(
+      SceUserServiceLoginUserIdList *userIdList);
 #endif
 
 #include "../audio_driver.h"
@@ -68,14 +77,33 @@ typedef struct psp_audio
 #define AUDIO_BUFFER_SIZE_MASK (AUDIO_BUFFER_SIZE-1)
 
 /* Return port used */
-static int psp_configure_audio(unsigned rate)
+static int psp_configure_audio(unsigned rate, int *user_id)
 {
 #if defined(VITA)
    return sceAudioOutOpenPort(
          SCE_AUDIO_OUT_PORT_TYPE_MAIN, AUDIO_OUT_COUNT,
          rate, SCE_AUDIO_OUT_MODE_STEREO);
 #elif defined(ORBIS)
-   return sceAudioOutOpen(0xff,
+   SceUserServiceLoginUserIdList user_id_list;
+   int i;
+   int result = sceUserServiceGetLoginUserIdList(&user_id_list);
+
+   *user_id = SCE_USER_SERVICE_USER_ID_INVALID;
+   if (result >= 0)
+      for (i = 0; i < SCE_USER_SERVICE_MAX_LOGIN_USERS; i++)
+         if (user_id_list.userId[i] != SCE_USER_SERVICE_USER_ID_INVALID)
+         {
+            *user_id = user_id_list.userId[i];
+            break;
+         }
+
+   printf("[PS4 AUDIO] login-users result=0x%08x userId=0x%08x\n",
+         result, *user_id);
+   fflush(stdout);
+   if (*user_id == SCE_USER_SERVICE_USER_ID_INVALID)
+      return -1;
+
+   return sceAudioOutOpen(*user_id,
          SCE_AUDIO_OUT_PORT_TYPE_MAIN, 0, AUDIO_OUT_COUNT,
          rate, SCE_AUDIO_OUT_MODE_STEREO);
 #else
@@ -111,9 +139,20 @@ static void psp_audio_mainloop(void *data)
       slock_unlock(psp->cond_lock);
 
 #if defined(VITA) || defined(ORBIS)
-      sceAudioOutOutput(psp->port,
+      {
+         int output_result = sceAudioOutOutput(psp->port,
         cond ? (psp->zeroBuffer)
               : (psp->buffer + read_pos_2));
+#if defined(ORBIS)
+         static unsigned output_logs;
+         if (output_logs++ < 4)
+         {
+            printf("[PS4 AUDIO] output[%u] handle=%d silence=%d result=0x%08x\n",
+                  output_logs, psp->port, cond, output_result);
+            fflush(stdout);
+         }
+#endif
+      }
 #else
       sceAudioSRCOutputBlocking(PSP_AUDIO_VOLUME_MAX,
               cond
@@ -131,19 +170,51 @@ static void *psp_audio_init(const char *device,
       unsigned *new_rate)
 {
    int port;
+#if defined(ORBIS)
+   int user_id;
+   int init_result;
+#endif
    psp_audio_t *psp = (psp_audio_t*)calloc(1, sizeof(psp_audio_t));
 
    if (!psp)
       return NULL;
 
-   if ((port = psp_configure_audio(rate)) < 0)
+#if defined(ORBIS)
+   init_result = sceAudioOutInit();
+   printf("[PS4 AUDIO] init result=0x%08x rate=%u format=stereo_s16 "
+         "frames=%u latency=%u block_frames=%u\n", init_result, rate,
+         AUDIO_OUT_COUNT, latency, block_frames);
+   fflush(stdout);
+   if (init_result < 0)
    {
+      free(psp);
+      return NULL;
+   }
+#endif
+
+   if ((port = psp_configure_audio(rate,
+#if defined(ORBIS)
+               &user_id
+#else
+               NULL
+#endif
+               )) < 0)
+   {
+#if defined(ORBIS)
+      printf("[PS4 AUDIO] open FAILED userId=0x%08x port=MAIN "
+            "index=0 frames=%u rate=%u format=stereo_s16 result=0x%08x\n",
+            user_id, AUDIO_OUT_COUNT, rate, port);
+      fflush(stdout);
+#endif
       free(psp);
       return NULL;
    }
 
 #if defined(ORBIS)
-   sceAudioOutInit();
+   printf("[PS4 AUDIO] open OK userId=0x%08x handle=%d port=MAIN "
+         "index=0 frames=%u rate=%u format=stereo_s16\n", user_id, port,
+         AUDIO_OUT_COUNT, rate);
+   fflush(stdout);
 #endif
    /* Cache aligned, not necessary but helpful. */
    psp->buffer        = (uint32_t*)malloc(AUDIO_BUFFER_SIZE * sizeof(uint32_t));
