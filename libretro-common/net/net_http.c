@@ -201,7 +201,7 @@ struct http_connection_t
 static void net_http_log_transport_state(
       const struct http_t *state, const char *stage, ssize_t io_len)
 {
-#if defined(DEBUG)
+#if defined(DEBUG) || defined(ORBIS)
    const char *method = "GET";
    const char *domain = "<null>";
    const char *path   = "<null>";
@@ -223,6 +223,22 @@ static void net_http_log_transport_state(
       }
    }
 
+#if defined(ORBIS)
+   {
+      static unsigned log_count;
+      char message[768];
+      int sceKernelDebugOutText(int channel, const char *text);
+      if (log_count++ >= 24)
+         return;
+      snprintf(message, sizeof(message),
+         "[PS4 HTTP] %s method=%s host=%s port=%d path=/%s ssl=%d fd=%d connected=%d sent=%d err=%d io=%ld errno=%d\n",
+         stage ? stage : "unknown", method, domain, port, path,
+         state ? (state->ssl ? 1 : 0) : 0, fd, connected,
+         state ? (state->request_sent ? 1 : 0) : 0,
+         state ? (state->err ? 1 : 0) : 0, (long)io_len, errno);
+      sceKernelDebugOutText(0, message);
+   }
+#else
    fprintf(stderr,
          "[net_http] %s: method=%s host=%s port=%d path=/%s ssl=%d fd=%d connected=%d request_sent=%d err=%d io_len=%ld errno=%d (%s)\n",
          stage ? stage : "unknown",
@@ -239,6 +255,7 @@ static void net_http_log_transport_state(
          errno,
          strerror(errno));
    fflush(stderr);
+#endif
 #else
    (void)state;
    (void)stage;
@@ -1159,7 +1176,10 @@ static bool net_http_connect(struct http_t *state)
 
 #ifndef HAVE_SSL
    if (state->ssl)
+   {
+      net_http_log_transport_state(state, "https_unsupported", -1);
       return false;
+   }
 #else
    if (state->ssl)
    {
