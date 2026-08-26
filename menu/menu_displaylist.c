@@ -1958,7 +1958,8 @@ static unsigned menu_displaylist_parse_supported_cores(
     * enumerate. Expose the built-in core through the existing direct-load
     * action; selecting it sets CORE_TYPE_PLAIN before content_load(), which
     * binds the statically linked retro_* entry points. */
-   if (menu_entries_append(info->list,
+   if (   !core_available
+       && menu_entries_append(info->list,
             "builtin_mame2003_plus",
             msg_hash_to_str(current_core_enum_label),
             current_core_enum_label,
