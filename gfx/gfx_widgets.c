@@ -200,6 +200,8 @@ static void gfx_widgets_msg_queue_free(
       dispgfx_widget_t *p_dispwidget,
       disp_widget_msg_t *msg);
 
+#define DISP_WIDGET_MSG_MAGIC 0x47574d53u
+
 void gfx_widgets_msg_queue_push(
       retro_task_t *task,
       const char *msg,
@@ -231,6 +233,17 @@ void gfx_widgets_msg_queue_push(
       if (task && task->frontend_userdata)
       {
          msg_widget            = (disp_widget_msg_t*)task->frontend_userdata;
+         if (msg_widget->magic != DISP_WIDGET_MSG_MAGIC)
+         {
+            /* A task can outlive its notification during updater teardown.
+             * Never dereference a stale frontend_userdata pointer. */
+            task->frontend_userdata = NULL;
+            msg_widget = NULL;
+         }
+      }
+
+      if (task && task->frontend_userdata && msg_widget)
+      {
          /* msg_widgets can be passed between tasks: a download task
           * hands its widget to the decompress task it spawns (see
           * task_push_decompress()'s frontend_userdata argument), so the
@@ -294,6 +307,7 @@ void gfx_widgets_msg_queue_push(
             return;
 
          msg_widget->msg                        = NULL;
+         msg_widget->magic                      = DISP_WIDGET_MSG_MAGIC;
          msg_widget->msg_new                    = NULL;
          msg_widget->msg_transition_animation   = 0.0f;
          msg_widget->msg_len                    = 0;
@@ -689,6 +703,8 @@ static void gfx_widgets_msg_queue_free(
 
    if (msg->msg_new)
       free(msg->msg_new);
+
+   msg->magic = 0;
 
    p_dispwidget->flags &= ~DISPGFX_WIDGET_FLAG_MOVING;
 }

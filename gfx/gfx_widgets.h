@@ -170,6 +170,7 @@ typedef struct
 
 typedef struct disp_widget_msg
 {
+   uint32_t magic;
    char *msg;
    char *msg_new;
    retro_task_t *task_ptr;
