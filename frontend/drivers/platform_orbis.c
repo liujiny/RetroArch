@@ -85,11 +85,18 @@
 static char eboot_path[512] = {0};
 int s_piglet_module = -1;
 int s_shacc_module  = -1;
+static int orbis_net_pool_id = -1;
 static bool orbis_runtime_initialized;
 
 int sceKernelDebugOutText(int channel, const char *text);
 int sceNetInit(void);
 int sceNetCtlInit(void);
+int sceNetPoolCreate(const char *name, int size, int flags);
+
+int frontend_orbis_get_net_pool_id(void)
+{
+   return orbis_net_pool_id;
+}
 
 static enum frontend_fork orbis_fork_mode = FRONTEND_FORK_NONE;
 
@@ -166,12 +173,20 @@ static bool frontend_orbis_init_runtime(void)
    {
       int net_result = sceNetInit();
       int netctl_result = sceNetCtlInit();
+      int pool_result = -1;
       char message[192];
+
+      if (net_result >= 0)
+         pool_result = sceNetPoolCreate("retroarch_net_pool", 1024 * 1024, 0);
+      if (pool_result >= 0)
+         orbis_net_pool_id = pool_result;
+
       snprintf(message, sizeof(message),
-            "[PS4 NET] sceNetInit=0x%08x sceNetCtlInit=0x%08x\n",
-            net_result, netctl_result);
+            "[PS4 NET] sceNetInit=0x%08x sceNetCtlInit=0x%08x "
+            "sceNetPoolCreate=0x%08x\n",
+            net_result, netctl_result, pool_result);
       sceKernelDebugOutText(0, message);
-      if (net_result < 0 || netctl_result < 0)
+      if (net_result < 0 || netctl_result < 0 || pool_result < 0)
          return false;
    }
 

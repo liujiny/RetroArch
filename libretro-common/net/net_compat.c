@@ -35,6 +35,7 @@ int sceNetResolverStartNtoa(int resolver, const char *hostname,
       struct in_addr *address, int timeout, int retries, int flags);
 int sceNetResolverDestroy(int resolver);
 int sceKernelDebugOutText(int channel, const char *text);
+int frontend_orbis_get_net_pool_id(void);
 
 static void orbis_resolver_log(const char *name, int resolver,
       int resolve_ret, int destroy_ret, const struct in_addr *address)
@@ -60,7 +61,8 @@ struct hostent *gethostbyname(const char *name)
    static struct hostent result;
    static struct in_addr address;
    static char *addresses[2];
-   int resolver = sceNetResolverCreate("retroarch", 0, 0);
+   int resolver = sceNetResolverCreate("retroarch",
+         frontend_orbis_get_net_pool_id(), 0);
    int ret       = -1;
    int destroy_ret;
 
