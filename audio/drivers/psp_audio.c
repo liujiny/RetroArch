@@ -88,6 +88,12 @@ typedef struct psp_audio
 } psp_audio_t;
 
 #define AUDIO_OUT_COUNT 512u
+#if defined(ORBIS)
+#undef AUDIO_OUT_COUNT
+#define AUDIO_OUT_COUNT 256u
+#define PS4_AUDIO_SYSTEM_USER_ID 0xff
+#define SCE_AUDIO_OUT_ERROR_ALREADY_INIT ((int)0x8026000e)
+#endif
 #define AUDIO_BUFFER_SIZE (1u<<13u)
 #define AUDIO_BUFFER_SIZE_MASK (AUDIO_BUFFER_SIZE-1)
 
@@ -100,22 +106,14 @@ static int psp_configure_audio(unsigned rate, int *user_id)
          rate, SCE_AUDIO_OUT_MODE_STEREO);
 #elif defined(ORBIS)
    SceUserServiceLoginUserIdList user_id_list;
-   int i;
    int result = sceUserServiceGetLoginUserIdList(&user_id_list);
 
-   *user_id = SCE_USER_SERVICE_USER_ID_INVALID;
-   if (result >= 0)
-      for (i = 0; i < SCE_USER_SERVICE_MAX_LOGIN_USERS; i++)
-         if (user_id_list.userId[i] != SCE_USER_SERVICE_USER_ID_INVALID)
-         {
-            *user_id = user_id_list.userId[i];
-            break;
-         }
-
-   psp_audio_klogf("[PS4 AUDIO] login-users result=0x%08x userId=0x%08x\n",
+   /* AudioOut MAIN is opened for the system user (0xff). A logged-in
+    * UserService ID is valid for Pad, but AudioOut rejects it with
+    * SCE_DEVICE_SERVICE_ERROR_INVALID_USER (0x809b0001). */
+   *user_id = PS4_AUDIO_SYSTEM_USER_ID;
+   psp_audio_klogf("[PS4 AUDIO] login-users result=0x%08x audioUserId=0x%08x\n",
          result, *user_id);
-   if (*user_id == SCE_USER_SERVICE_USER_ID_INVALID)
-      return -1;
 
    return sceAudioOutOpen(*user_id,
          SCE_AUDIO_OUT_PORT_TYPE_MAIN, 0, AUDIO_OUT_COUNT,
@@ -197,7 +195,7 @@ static void *psp_audio_init(const char *device,
    psp_audio_klogf("[PS4 AUDIO] psp_audio_init entered; init result=0x%08x rate=%u channels=2 format=stereo_s16 "
          "frames=%u latency=%u block_frames=%u\n", init_result, rate,
          AUDIO_OUT_COUNT, latency, block_frames);
-   if (init_result < 0)
+   if (init_result < 0 && init_result != SCE_AUDIO_OUT_ERROR_ALREADY_INIT)
    {
       free(psp);
       return NULL;
