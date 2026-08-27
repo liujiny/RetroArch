@@ -177,6 +177,8 @@ size_t frontend_driver_get_core_extension(char *s, size_t len)
 #ifdef HAVE_DYNAMIC
 #ifdef _WIN32
    return strlcpy(s, "dll", len);
+#elif defined(ORBIS)
+   return strlcpy(s, "self", len);
 #elif (defined(IOS) && defined(HAVE_FRAMEWORKS)) || (defined(OSX) && defined(HAVE_APPLE_STORE))
    return strlcpy(s, "framework", len);
 #elif defined(__APPLE__) || defined(__MACH__)

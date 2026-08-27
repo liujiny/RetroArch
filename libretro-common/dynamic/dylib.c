@@ -22,6 +22,7 @@
 
 #include <string.h>
 #include <stdio.h>
+#include <stdint.h>
 #include <dynamic/dylib.h>
 #include <encodings/utf.h>
 #include <string/stdstring.h>
@@ -30,6 +31,7 @@
 
 #if defined(ORBIS)
 #include <orbis/libkernel.h>
+#include <sys/stat.h>
 #endif
 
 #ifdef NEED_DYNAMIC
@@ -40,6 +42,18 @@
 #else
 #if !defined(ORBIS)
 #include <dlfcn.h>
+#endif
+
+#ifdef ORBIS
+static char last_dyn_err[256];
+static unsigned orbis_dylib_symbol_log_count;
+
+int sceKernelDebugOutText(int channel, const char *text);
+
+static void orbis_dylib_log(const char *message)
+{
+   sceKernelDebugOutText(0, message);
+}
 #endif
 #endif
 
@@ -128,8 +142,36 @@ dylib_t dylib_load(const char *path)
    }
    last_dyn_err[0] = 0;
 #elif defined(ORBIS)
-   int res;
-   dylib_t lib = (dylib_t)sceKernelLoadStartModule(path, 0, NULL, 0, NULL, &res);
+   struct stat st;
+   int start_result = 0;
+   int module        = -1;
+   char message[512];
+
+   if (stat(path, &st) == 0)
+      snprintf(message, sizeof(message),
+            "[PS4 DYCORE] open path=%s size=%lld\n", path,
+            (long long)st.st_size);
+   else
+      snprintf(message, sizeof(message),
+            "[PS4 DYCORE] open path=%s stat_failed\n", path);
+   orbis_dylib_log(message);
+
+   module = sceKernelLoadStartModule(path, 0, NULL, 0, NULL, &start_result);
+   snprintf(message, sizeof(message),
+         "[PS4 DYCORE] load module=0x%08x start=0x%08x\n",
+         module, start_result);
+   orbis_dylib_log(message);
+
+   if (module < 0)
+   {
+      snprintf(last_dyn_err, sizeof(last_dyn_err),
+            "sceKernelLoadStartModule failed: module=0x%08x start=0x%08x",
+            module, start_result);
+      return NULL;
+   }
+
+   last_dyn_err[0] = '\0';
+   dylib_t lib = (dylib_t)(intptr_t)module;
 #elif defined(IOS) || defined(OSX)
     dylib_t lib;
     static const char fw_suffix[] = ".framework";
@@ -154,7 +196,7 @@ dylib_t dylib_load(const char *path)
 
 char *dylib_error(void)
 {
-#ifdef _WIN32
+#if defined(_WIN32) || defined(ORBIS)
    if (last_dyn_err[0])
       return last_dyn_err;
    return NULL;
@@ -189,12 +231,31 @@ function_t dylib_proc(dylib_t lib, const char *proc)
    last_dyn_err[0] = 0;
 #elif defined(ORBIS)
    void *ptr_sym = NULL;
+   int dlsym_result = -1;
    sym = NULL;
 
    if (lib)
    {
-     sceKernelDlsym((SceKernelModule)lib, proc, &ptr_sym);
-     memcpy(&sym, &ptr_sym, sizeof(void*));
+      char message[256];
+      SceKernelModule module = (SceKernelModule)(intptr_t)lib;
+      dlsym_result = sceKernelDlsym(module, proc, &ptr_sym);
+      if (dlsym_result >= 0 && ptr_sym)
+         memcpy(&sym, &ptr_sym, sizeof(void*));
+
+      if (orbis_dylib_symbol_log_count < 64)
+      {
+         snprintf(message, sizeof(message),
+               "[PS4 DYCORE] dlsym %s result=0x%08x ptr=%p\n",
+               proc, dlsym_result, ptr_sym);
+         orbis_dylib_log(message);
+         orbis_dylib_symbol_log_count++;
+      }
+
+      if (dlsym_result < 0 || !ptr_sym)
+         snprintf(last_dyn_err, sizeof(last_dyn_err),
+               "sceKernelDlsym(%s) failed: 0x%08x", proc, dlsym_result);
+      else
+         last_dyn_err[0] = '\0';
    }
 #else
    void *ptr_sym = NULL;
@@ -232,8 +293,17 @@ void dylib_close(dylib_t lib)
       set_dl_err();
    last_dyn_err[0] = 0;
 #elif defined(ORBIS)
-   int res;
-   sceKernelStopUnloadModule((SceKernelModule)lib, 0, NULL, 0, NULL, &res);
+   int stop_result = 0;
+   int result;
+   char message[192];
+   SceKernelModule module = (SceKernelModule)(intptr_t)lib;
+
+   result = sceKernelStopUnloadModule(
+         module, 0, NULL, 0, NULL, &stop_result);
+   snprintf(message, sizeof(message),
+         "[PS4 DYCORE] unload module=0x%08x result=0x%08x stop=0x%08x\n",
+         module, result, stop_result);
+   orbis_dylib_log(message);
 #else
 #ifndef NO_DLCLOSE
    dlclose(lib);
