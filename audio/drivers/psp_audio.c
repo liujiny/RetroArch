@@ -338,7 +338,21 @@ static bool psp_audio_stop(void *data)
    psp_audio_t* psp = (psp_audio_t*)data;
 
 #if defined(ORBIS)
-   return false;
+   /* AudioOut's worker remains alive on PS4, but a failed core load can leave
+    * stale samples and ring-buffer indices behind. Flush the software FIFO so
+    * the next core starts with a clean stream without reopening the port. */
+   if (psp)
+   {
+      slock_lock(psp->fifo_lock);
+      psp->read_pos  = 0;
+      psp->write_pos = 0;
+      memset(psp->buffer, 0, AUDIO_BUFFER_SIZE * sizeof(uint32_t));
+      slock_unlock(psp->fifo_lock);
+      slock_lock(psp->cond_lock);
+      scond_signal(psp->cond);
+      slock_unlock(psp->cond_lock);
+   }
+   return true;
 #else
    if (psp)
    {
