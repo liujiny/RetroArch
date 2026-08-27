@@ -4,6 +4,8 @@ GRIFFIN_BUILD        = 0
 WHOLE_ARCHIVE_LINK   = 0
 
 HAVE_STATIC_DUMMY ?= 0
+HAVE_ORBIS_DYNAMIC_CORES ?= 1
+STATIC_CORE_LIB ?= retro_orbis
 HAVE_GLES3 ?= 0
 HAVE_MOUSE ?= 0
 HAVE_KEYBOARD ?= 0
@@ -27,7 +29,11 @@ ifeq ($(HAVE_GLES3),1)
   DEFINES += -DHAVE_OPENGLES3
 endif
 
-ifeq ($(HAVE_STATIC_DUMMY),1)
+ifeq ($(HAVE_ORBIS_DYNAMIC_CORES),1)
+  HAVE_DYNAMIC := 1
+  HAVE_DYLIB := 1
+  DEFINES += -DHAVE_DYNAMIC -DHAVE_ORBIS_DYNAMIC_CORES
+else ifeq ($(HAVE_STATIC_DUMMY),1)
   DEFINES += -DHAVE_STATIC_DUMMY
 endif
 
@@ -85,7 +91,7 @@ else
 	HAVE_ONLINE_UPDATER 	:= 1
 	HAVE_COMPRESSION 			:= 1
 	HAVE_UPDATE_ASSETS 		:= 1
-	HAVE_UPDATE_CORES 		:= 1
+	HAVE_UPDATE_CORES 		:= 0
 	HAVE_UPDATE_CORE_INFO 		:= 1
 	HAVE_CONFIGFILE 			:= 1
 	HAVE_CHD 							:= 1
@@ -123,7 +129,7 @@ INCDIRS += -I. -Idefines -Ideps -Ilibretro-common/include -Ideps/rcheevos/includ
 ARCHFLAGS += --target=x86_64-scei-ps4 -DORBIS -D__ORBIS__ -D__PS4__ -D_BSD_SOURCE
 DEFINES += -DRARCH_INTERNAL -DRARCH_CONSOLE -DHAVE_FILTERS_BUILTIN \
 					 -DHAVE_XMB -DHAVE_RGUI -DHAVE_OZONE \
-					 -DHAVE_ONLINE_UPDATER -DHAVE_UPDATE_CORES -DHAVE_UPDATE_CORE_INFO -DHAVE_UPDATE_ASSETS \
+					 -DHAVE_ONLINE_UPDATER -DHAVE_UPDATE_CORE_INFO -DHAVE_UPDATE_ASSETS \
 
 # Compiling with -Werror and disabling some warnings
 DEFINES += -Werror -Wno-macro-redefined -Wno-typedef-redefinition -Wno-non-literal-null-conversion -Wno-void-pointer-to-int-cast \
@@ -157,7 +163,9 @@ PS4_LIBS += -luser_mem_sys -lkernel_stub -lSceLibcInternal_stub -lunwind -lc++ -
 				-lSceUserService_stub -lScePigletv2VSH_stub -lSceVideoOut_stub -lSceGnmDriver_stub -lorbisPad \
 				-lScePad_stub -lSceAudioOut_stub -lSceIme_stub -lSceNetCtl_stub -lSQLite
 
-ifeq ($(HAVE_STATIC_DUMMY),1)
+ifeq ($(HAVE_ORBIS_DYNAMIC_CORES),1)
+  LIBS := $(PS4_LIBS)
+else ifeq ($(HAVE_STATIC_DUMMY),1)
   LIBS	:= $(PS4_LIBS)
 else
   LIBS	:= $(WHOLE_START) -lretro_orbis $(WHOLE_END) $(PS4_LIBS)

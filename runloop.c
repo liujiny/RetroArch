@@ -344,11 +344,22 @@ static void runloop_game_ai_think_cb(void *userdata,
 #endif
 
 #ifdef HAVE_DYNAMIC
+#ifdef HAVE_ORBIS_DYNAMIC_CORES
+#define SYMBOL(x) do { \
+   function_t func = dylib_proc(lib_handle_local, #x); \
+   memcpy(&current_core->x, &func, sizeof(func)); \
+   if (!current_core->x) { \
+      RARCH_ERR("Failed to load symbol: \"%s\" (%s)\n", #x, dylib_error()); \
+      return false; \
+   } \
+} while (0)
+#else
 #define SYMBOL(x) do { \
    function_t func = dylib_proc(lib_handle_local, #x); \
    memcpy(&current_core->x, &func, sizeof(func)); \
    if (!current_core->x) { RARCH_ERR("Failed to load symbol: \"%s\"\n", #x); retroarch_fail(1, "runloop_init_libretro_symbols()"); } \
 } while (0)
+#endif
 #else
 #define SYMBOL(x) current_core->x = x
 #endif
@@ -405,6 +416,15 @@ static void runloop_game_ai_think_cb(void *userdata,
             x(retro_get_region); \
             x(retro_get_memory_data); \
             x(retro_get_memory_size);
+
+#ifdef HAVE_ORBIS_DYNAMIC_CORES
+int sceKernelDebugOutText(int channel, const char *text);
+
+static void orbis_dynamic_core_log(const char *message)
+{
+   sceKernelDebugOutText(0, message);
+}
+#endif
 
 #ifdef _WIN32
 #define PERF_LOG_FMT "[PERF] Avg (%s): %I64u ticks, %I64u runs.\n"
@@ -4539,6 +4559,9 @@ static bool core_unload_game(void)
    if ((runloop_st->current_core.flags & RETRO_CORE_FLAG_GAME_LOADED))
    {
       RARCH_LOG("[Core] Unloading game...\n");
+#ifdef HAVE_ORBIS_DYNAMIC_CORES
+      orbis_dynamic_core_log("[PS4 DYCORE] retro_unload_game\n");
+#endif
       runloop_st->current_core.retro_unload_game();
       runloop_st->core_poll_type_override  = POLL_TYPE_OVERRIDE_DONTCARE;
       runloop_st->current_core.flags      &= ~RETRO_CORE_FLAG_GAME_LOADED;
@@ -4688,7 +4711,13 @@ void runloop_event_deinit_core(void)
    if (runloop_st->current_core.flags & RETRO_CORE_FLAG_INITED)
    {
       RARCH_LOG("[Core] Unloading core...\n");
+#ifdef HAVE_ORBIS_DYNAMIC_CORES
+      orbis_dynamic_core_log("[PS4 DYCORE] retro_deinit enter\n");
+#endif
       runloop_st->current_core.retro_deinit();
+#ifdef HAVE_ORBIS_DYNAMIC_CORES
+      orbis_dynamic_core_log("[PS4 DYCORE] retro_deinit exit\n");
+#endif
 #if TARGET_OS_IPHONE
       exec_mem_ledger_free_all();
 #endif
@@ -5416,6 +5445,19 @@ bool runloop_event_init_core(
    runloop_st->current_core.flags         |= RETRO_CORE_FLAG_SYMBOLS_INITED;
    runloop_st->current_core.retro_get_system_info(&sys_info->info);
 
+#ifdef HAVE_ORBIS_DYNAMIC_CORES
+   {
+      char message[384];
+      unsigned api_version = runloop_st->current_core.retro_api_version();
+      snprintf(message, sizeof(message),
+            "[PS4 DYCORE] api=%u name=%s version=%s\n",
+            api_version,
+            sys_info->info.library_name ? sys_info->info.library_name : "(null)",
+            sys_info->info.library_version ? sys_info->info.library_version : "(null)");
+      orbis_dynamic_core_log(message);
+   }
+#endif
+
    if (!sys_info->info.library_name)
       sys_info->info.library_name = msg_hash_to_str(MSG_UNKNOWN);
    if (!sys_info->info.library_version)
@@ -5525,7 +5567,13 @@ bool runloop_event_init_core(
 
    video_driver_cached_frame_invalidate();
 
+#ifdef HAVE_ORBIS_DYNAMIC_CORES
+   orbis_dynamic_core_log("[PS4 DYCORE] retro_init enter\n");
+#endif
    runloop_st->current_core.retro_init();
+#ifdef HAVE_ORBIS_DYNAMIC_CORES
+   orbis_dynamic_core_log("[PS4 DYCORE] retro_init exit\n");
+#endif
    runloop_st->current_core.flags         |= RETRO_CORE_FLAG_INITED;
 
    /* Attempt to set initial disk index */
@@ -9583,6 +9631,17 @@ bool core_load_game(retro_ctx_load_content_info_t *load_info)
 
    set_save_state_in_background(false);
 
+#ifdef HAVE_ORBIS_DYNAMIC_CORES
+   {
+      char message[512];
+      const char *content_path = path_get(RARCH_PATH_CONTENT);
+      snprintf(message, sizeof(message),
+            "[PS4 DYCORE] retro_load_game path=%s\n",
+            content_path ? content_path : "(null)");
+      orbis_dynamic_core_log(message);
+   }
+#endif
+
    if (load_info && load_info->special)
       game_loaded = runloop_st->current_core.retro_load_game_special(
             load_info->special->id, load_info->info, load_info->content->size);
@@ -9595,6 +9654,12 @@ bool core_load_game(retro_ctx_load_content_info_t *load_info)
     * way off, behind the menu or a pause. */
    input_driver_flush_rumble();
    led_driver_flush();
+
+#ifdef HAVE_ORBIS_DYNAMIC_CORES
+   orbis_dynamic_core_log(game_loaded
+         ? "[PS4 DYCORE] retro_load_game result=1\n"
+         : "[PS4 DYCORE] retro_load_game result=0\n");
+#endif
 
    if (game_loaded)
    {
@@ -9794,6 +9859,20 @@ void core_run(void)
       /* The flags this iteration's checks flipped, fast-forward above
        * all, reach the frame's own audio rather than the next frame's. */
       audio_driver_publish_runloop();
+#ifdef HAVE_ORBIS_DYNAMIC_CORES
+      {
+         static unsigned orbis_dynamic_run_log_count;
+         if (orbis_dynamic_run_log_count < 3)
+         {
+            char message[96];
+            snprintf(message, sizeof(message),
+                  "[PS4 DYCORE] retro_run call=%u\n",
+                  orbis_dynamic_run_log_count + 1);
+            orbis_dynamic_core_log(message);
+            orbis_dynamic_run_log_count++;
+         }
+      }
+#endif
       current_core->retro_run();
       audio_driver_frame_end();
    }
