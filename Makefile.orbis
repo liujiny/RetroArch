@@ -59,7 +59,9 @@ else
 	HAVE_RJPEG						:= 1
 	HAVE_RBMP							:= 1
 	HAVE_RTGA							:= 1
-	HAVE_OVERLAY					:= 1
+	# PS4 has physical controller input; touchscreen overlays are mobile UI and
+	# must not be compiled into the console build.
+	HAVE_OVERLAY					:= 0
 	HAVE_7ZIP							:= 1
 	HAVE_EGL 							:= 1
 	HAVE_GFX_WIDGETS 			:= 1
