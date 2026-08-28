@@ -4165,6 +4165,7 @@ bool libretro_get_system_info(
    struct retro_system_info dummy_info;
 #ifdef HAVE_DYNAMIC
    dylib_t lib;
+   bool use_current_core = false;
 #endif
    runloop_state_t *runloop_st  = &runloop_state;
 
@@ -4179,7 +4180,19 @@ bool libretro_get_system_info(
    dummy_info.block_extract     = false;
 
 #ifdef HAVE_DYNAMIC
-   if (!(lib = libretro_get_system_info_lib(
+   /* Orbis may return the existing module handle when the same SELF is
+    * loaded again. Reusing the live core prevents the temporary query from
+    * unloading the module whose function pointers the runloop is using. */
+   if (runloop_st->lib_handle
+         && (runloop_st->current_core.flags & RETRO_CORE_FLAG_SYMBOLS_INITED)
+         && runloop_st->current_core.retro_get_system_info
+         && path_get(RARCH_PATH_CORE)
+         && strcmp(path, path_get(RARCH_PATH_CORE)) == 0)
+   {
+      runloop_st->current_core.retro_get_system_info(&dummy_info);
+      use_current_core = true;
+   }
+   else if (!(lib = libretro_get_system_info_lib(
          path, &dummy_info, load_no_content)))
    {
       RARCH_ERR("[Core] %s: \"%s\"\n",
@@ -4235,7 +4248,8 @@ bool libretro_get_system_info(
    sysinfo->valid_extensions = runloop_st->current_valid_extensions;
 
 #ifdef HAVE_DYNAMIC
-   dylib_close(lib);
+   if (!use_current_core)
+      dylib_close(lib);
 #endif
    return true;
 }
