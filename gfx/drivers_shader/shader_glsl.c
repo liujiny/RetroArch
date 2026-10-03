@@ -42,6 +42,8 @@
 
 #if defined(ORBIS)
 #include "../../deps/xxHash/xxhash.h"
+void frontend_orbis_shader_probe(const char *path);
+int sceKernelDebugOutText(int channel, const char *text);
 #endif
 
 #if defined(VITA)
@@ -502,7 +504,18 @@ static bool gl_glsl_compile_shader(glsl_shader_data_t *glsl,
 #endif
 
    glShaderSource(shader, ARRAY_SIZE(source), source, NULL);
+#if defined(ORBIS)
+   {
+      char line[160];
+      snprintf(line, sizeof(line), "[PS4 SHCOMPILE] begin id=%u stage=%s bytes=%lu\n",
+            shader, strstr(define, "FRAGMENT") ? "fragment" : "vertex", (unsigned long)strlen(program));
+      sceKernelDebugOutText(0, line);
+   }
+#endif
    glCompileShader(shader);
+#if defined(ORBIS)
+   sceKernelDebugOutText(0, "[PS4 SHCOMPILE] returned\n");
+#endif
 
    glGetShaderiv(shader, GL_COMPILE_STATUS, &status);
    gl_glsl_print_shader_log(shader);
@@ -640,6 +653,9 @@ static bool gl_glsl_load_source_path(struct video_shader_pass *pass,
          || len <= 0)
       return false;
 
+#if defined(ORBIS)
+   frontend_orbis_shader_probe(path);
+#endif
    gl_glsl_strip_parameter_pragmas(pass->source.string.vertex,
          "#pragma parameter");
    pass->source.string.fragment = strdup(pass->source.string.vertex);

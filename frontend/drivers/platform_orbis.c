@@ -97,6 +97,68 @@ static bool orbis_runtime_initialized;
 
 static enum frontend_fork orbis_fork_mode = FRONTEND_FORK_NONE;
 
+/* Diagnostic build: all allocations are freed by their owning allocator.
+ * No import patching, heap replacement or signal recovery. */
+int sceKernelDebugOutText(int channel, const char *text);
+void frontend_orbis_shader_probe(const char *path)
+{
+   static unsigned calls;
+   static void *(*system_malloc)(size_t);
+   static void (*system_free)(void *);
+   char line[512];
+   size_t i;
+   const size_t sizes[] = {72, 1024 * 1024, 16 * 1024 * 1024};
+   if (calls++ >= 12) return;
+   if (!system_malloc || !system_free)
+   {
+      SceKernelModule modules[64];
+      size_t count = 0;
+      int result;
+      memset(modules, 0, sizeof(modules));
+      result = sceKernelGetModuleList(modules, 64, &count);
+      snprintf(line, sizeof(line), "[PS4 SHHEAP] modules rc=%08x count=%lu heap_symbol=%llu\n",
+            result, (unsigned long)count, (unsigned long long)sceLibcHeapSize);
+      sceKernelDebugOutText(0, line);
+      if (result >= 0)
+         for (i = 0; i < count && i < 64; i++)
+         {
+            SceKernelModuleInfo info;
+            memset(&info, 0, sizeof(info)); info.size = sizeof(info);
+            if (sceKernelGetModuleInfo(modules[i], &info) < 0) continue;
+            info.name[sizeof(info.name)-1] = 0;
+            if (strstr(info.name, "Libc") || strstr(info.name, "Shacc") || strstr(info.name, "Piglet"))
+            {
+               snprintf(line, sizeof(line), "[PS4 SHHEAP] module=%s handle=%x base=%p\n",
+                     info.name, modules[i], info.segmentInfo[0].address);
+               sceKernelDebugOutText(0, line);
+            }
+            if (strstr(info.name, "libSceLibcInternal"))
+            {
+               void *m = NULL, *f = NULL;
+               int mr = sceKernelDlsym(modules[i], "malloc", &m);
+               int fr = sceKernelDlsym(modules[i], "free", &f);
+               snprintf(line, sizeof(line), "[PS4 SHHEAP] system malloc=%p rc=%x free=%p rc=%x frontend_malloc=%p\n",
+                     m, mr, f, fr, (void*)malloc);
+               sceKernelDebugOutText(0, line);
+               if (!mr && !fr && m && f) { system_malloc = (void *(*)(size_t))m; system_free = (void (*)(void*))f; }
+            }
+         }
+   }
+   snprintf(line, sizeof(line), "[PS4 SHHEAP] preset-source=%s probe=%u\n", path, calls);
+   sceKernelDebugOutText(0, line);
+   for (i = 0; i < sizeof(sizes)/sizeof(sizes[0]); i++)
+   {
+      void *sys = system_malloc && system_free ? system_malloc(sizes[i]) : NULL;
+      void *app = malloc(sizes[i]);
+      snprintf(line, sizeof(line), "[PS4 SHHEAP] bytes=%lu system=%p frontend=%p system_resolved=%u\n",
+            (unsigned long)sizes[i], sys, app, system_malloc && system_free ? 1 : 0);
+      sceKernelDebugOutText(0, line);
+      if (sys) system_free(sys);
+      free(app);
+   }
+}
+
+
 int rarch_main(int argc, char *argv[], void *data);
 void main_exit(void *args);
 
