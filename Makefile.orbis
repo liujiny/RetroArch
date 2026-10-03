@@ -9,6 +9,7 @@ STATIC_CORE_LIB ?= retro_orbis
 HAVE_GLES3 ?= 0
 HAVE_MOUSE ?= 0
 HAVE_KEYBOARD ?= 0
+BUNDLE_CORES ?= 0
 
 PS4_TITLE_ID	:= RETROARCH
 PS4_TITLE_NAME	:= RetroArch
@@ -27,6 +28,10 @@ OBJ += deps/xxHash/xxhash.o \
 
 ifeq ($(HAVE_GLES3),1)
   DEFINES += -DHAVE_OPENGLES3
+endif
+
+ifeq ($(BUNDLE_CORES),1)
+  DEFINES += -DBUNDLE_CORES
 endif
 
 ifeq ($(HAVE_ORBIS_DYNAMIC_CORES),1)
