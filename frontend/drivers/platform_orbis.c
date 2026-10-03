@@ -82,6 +82,14 @@
 #define MODULE_PATH "/data/self/system/common/lib/"
 #define MODULE_PATH_EXT "/app0/sce_module/"
 
+/* Piglet/Shacc allocate through libSceLibcInternal, independently of the
+ * frontend's OrbisDev mspace and the dynamic cores' allocators. The CRT's
+ * weak -1 heap-size default leaves its capacity implicit. Captured Mattias
+ * and Lottes crashes both dereferenced a failed malloc(72) in Shacc. Give
+ * system-library allocations explicit headroom, keeping extended allocation.
+ */
+uint64_t sceLibcHeapSize = UINT64_C(256) * 1024 * 1024;
+
 static char eboot_path[512] = {0};
 int s_piglet_module = -1;
 int s_shacc_module  = -1;
