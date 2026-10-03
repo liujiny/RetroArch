@@ -104,9 +104,15 @@ static void *ps4_joypad_init(void *data)
 
             if (index == num_players)
             {
-               ds_joypad_states[num_players].handle[0] = scePadOpen(user_id, SCE_PAD_PORT_TYPE_STANDARD, 0, NULL);
-               if (ds_joypad_states[num_players].handle[0] == SCE_ORBISPAD_ERROR_ALREADY_OPENED)
-                  ds_joypad_states[num_players].handle[0] = confPad->padHandle;
+               handle = scePadOpen(user_id, SCE_PAD_PORT_TYPE_STANDARD, 0, NULL);
+               if (handle == SCE_ORBISPAD_ERROR_ALREADY_OPENED)
+               {
+                  if (confPad)
+                     handle = confPad->padHandle;
+                  else
+                     handle = ds_joypad_states[num_players].handle[0];
+               }
+               ds_joypad_states[num_players].handle[0] = handle;
 #if 0
                scePadGetHandle(user_id, SCE_PAD_PORT_TYPE_STANDARD, 0);
 
