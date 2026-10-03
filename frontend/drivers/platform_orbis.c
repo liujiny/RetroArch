@@ -53,6 +53,7 @@
 #include <string/stdstring.h>
 #include <boolean.h>
 #include <file/file_path.h>
+#include <queues/task_queue.h>
 #ifndef IS_SALAMANDER
 #include <lists/file_list.h>
 #endif
@@ -81,17 +82,103 @@
 #define MODULE_PATH "/data/self/system/common/lib/"
 #define MODULE_PATH_EXT "/app0/sce_module/"
 
-static char eboot_path[512]     = {0};
-SceKernelModule s_piglet_module;
-SceKernelModule s_shacc_module;
+static char eboot_path[512] = {0};
+int s_piglet_module = -1;
+int s_shacc_module  = -1;
+static bool orbis_runtime_initialized;
 
 static enum frontend_fork orbis_fork_mode = FRONTEND_FORK_NONE;
 
-#define MEM_SIZE (3UL * 1024 * 1024 * 1024) /* 2600 MiB */
-#define MEM_ALIGN (16UL * 1024)
+int rarch_main(int argc, char *argv[], void *data);
+void main_exit(void *args);
 
-/* TODO/FIXME: INCLUDING <orbislink.h> produces duplication errors */
-int initOrbisLinkAppVanillaGl(void);
+static int frontend_orbis_load_module(
+      const char *directory, const char *name)
+{
+   char path[PATH_MAX_LENGTH];
+   const char *separator = "/";
+   int start_result = 0;
+
+   if (directory[0] && directory[strlen(directory) - 1] == '/')
+      separator = "";
+   snprintf(path, sizeof(path), "%s%s%s.sprx", directory, separator, name);
+   return sceKernelLoadStartModule(path, 0, NULL, 0, NULL, &start_result);
+}
+
+static bool frontend_orbis_init_runtime(void)
+{
+   static const char *required_modules[] = {
+      "libSceSysCore",
+      "libSceMbus",
+      "libSceIpmi",
+      "libSceSystemService",
+      "libSceUserService",
+      "libSceAudioOut",
+      "libScePad"
+   };
+   const char *sandbox_word;
+   char module_path[PATH_MAX_LENGTH];
+   size_t i;
+
+   if (orbis_runtime_initialized)
+      return true;
+
+   sandbox_word = sceKernelGetFsSandboxRandomWord();
+   snprintf(module_path, sizeof(module_path), "/%s/common/lib",
+         sandbox_word ? sandbox_word : "system");
+
+   for (i = 0; i < sizeof(required_modules) / sizeof(required_modules[0]); i++)
+      frontend_orbis_load_module(module_path, required_modules[i]);
+
+   s_piglet_module = frontend_orbis_load_module(
+         MODULE_PATH, "libScePigletv2VSH");
+   if (s_piglet_module < 0)
+      s_piglet_module = frontend_orbis_load_module(
+            MODULE_PATH_EXT, "libScePigletv2VSH");
+   if (s_piglet_module < 0)
+      return false;
+
+   s_shacc_module = frontend_orbis_load_module(
+         MODULE_PATH, "libSceShaccVSH");
+   if (s_shacc_module < 0)
+      s_shacc_module = frontend_orbis_load_module(
+            MODULE_PATH_EXT, "libSceShaccVSH");
+   if (s_shacc_module < 0)
+      return false;
+
+   if (sceUserServiceInitialize(NULL) < 0)
+      return false;
+
+   sceSystemServiceHideSplashScreen();
+   orbis_runtime_initialized = true;
+   return true;
+}
+
+#ifdef __cplusplus
+extern "C"
+#endif
+int main(int argc, char *argv[])
+{
+   int status;
+
+   if (!frontend_orbis_init_runtime())
+      return 1;
+
+   if (argc > 0)
+   {
+      argc--;
+      argv++;
+   }
+
+   if (rarch_main(argc, argv, NULL) != 0)
+      return 1;
+
+   while ((status = runloop_iterate()) != -1)
+      task_queue_check();
+
+   main_exit(NULL);
+   return 0;
+}
 
 #if defined(HAVE_TAUON_SDK)
 void catchReturnFromMain(int exit_code)
@@ -186,22 +273,9 @@ static void frontend_orbis_get_env(int *argc, char *argv[],
 static void frontend_orbis_deinit(void *data) { }
 static void frontend_orbis_shutdown(bool unused) { }
 
-static bool frontend_orbis_init_app(void)
-{
-	if (initOrbisLinkAppVanillaGl() == 0)
-	{
-		debugNetInit(PC_DEVELOPMENT_IP_ADDRESS,PC_DEVELOPMENT_UDP_PORT,3);
-		debugNetPrintf(DEBUGNET_INFO,"Ready to have a lot of fun\n");
-		sceSystemServiceHideSplashScreen();
-		return true;
-	}
-	return false;
-}
-
 static void frontend_orbis_init(void *data)
 {
-   frontend_orbis_init_app();
-   sceSysmoduleLoadModuleInternal(SCE_SYSMODULE_INTERNAL_AUDIO_OUT);
+   frontend_orbis_init_runtime();
    verbosity_enable();
 }
 

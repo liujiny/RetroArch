@@ -68,6 +68,8 @@ typedef struct
     float refresh_rate;
 } orbis_ctx_data_t;
 
+extern int s_piglet_module;
+
 void orbis_ctx_destroy(void *data)
 {
    orbis_ctx_data_t *ctx_orbis = (orbis_ctx_data_t *)data;
@@ -275,6 +277,19 @@ static void orbis_ctx_swap_buffers(void *data)
 #endif
 }
 
+static gfx_ctx_proc_t orbis_ctx_get_proc_address(const char *symbol)
+{
+   gfx_ctx_proc_t proc = NULL;
+
+#ifdef HAVE_EGL
+   proc = egl_get_proc_address(symbol);
+#endif
+   if (!proc && s_piglet_module >= 0)
+      sceKernelDlsym(s_piglet_module, symbol, (void**)&proc);
+
+   return proc;
+}
+
 static void orbis_ctx_bind_hw_render(void *data, bool enable)
 {
 #ifdef HAVE_EGL
@@ -353,11 +368,7 @@ const gfx_ctx_driver_t orbis_ctx = {
     false, /* has_windowed */
     orbis_ctx_swap_buffers,
     orbis_ctx_input_driver,
-#ifdef HAVE_EGL
-    egl_get_proc_address,
-#else
-    NULL,
-#endif
+    orbis_ctx_get_proc_address,
     NULL,
     NULL,
     NULL,
