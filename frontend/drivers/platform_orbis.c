@@ -82,13 +82,7 @@
 #define MODULE_PATH "/data/self/system/common/lib/"
 #define MODULE_PATH_EXT "/app0/sce_module/"
 
-/* Piglet/Shacc allocate through libSceLibcInternal, independently of the
- * frontend's OrbisDev mspace and the dynamic cores' allocators. The CRT's
- * weak -1 heap-size default leaves its capacity implicit. Captured Mattias
- * and Lottes crashes both dereferenced a failed malloc(72) in Shacc. Give
- * system-library allocations explicit headroom, keeping extended allocation.
- */
-uint64_t sceLibcHeapSize = UINT64_C(256) * 1024 * 1024;
+#include "platform_orbis_heap.h"
 
 static char eboot_path[512] = {0};
 int s_piglet_module = -1;
@@ -116,8 +110,9 @@ void frontend_orbis_shader_probe(const char *path)
       int result;
       memset(modules, 0, sizeof(modules));
       result = sceKernelGetModuleList(modules, 64, &count);
-      snprintf(line, sizeof(line), "[PS4 SHHEAP] modules rc=%08x count=%lu heap_symbol=%llu\n",
-            result, (unsigned long)count, (unsigned long long)sceLibcHeapSize);
+      snprintf(line, sizeof(line), "[PS4 SHHEAP] modules rc=%08x count=%lu heap_symbol=%llu mode=%u internal_heap=%llu\n",
+            result, (unsigned long)count, (unsigned long long)sceLibcHeapSize, _sceLibcParam.heap_mode,
+            (unsigned long long)*_sceLibcParam.internal_heap_size);
       sceKernelDebugOutText(0, line);
       if (result >= 0)
          for (i = 0; i < count && i < 64; i++)
@@ -130,6 +125,22 @@ void frontend_orbis_shader_probe(const char *path)
             {
                snprintf(line, sizeof(line), "[PS4 SHHEAP] module=%s handle=%x base=%p\n",
                      info.name, modules[i], info.segmentInfo[0].address);
+               sceKernelDebugOutText(0, line);
+            }
+            if (strstr(info.name, "libkernel"))
+            {
+               void *get_type = NULL, *get_param = NULL;
+               int process_type = -1;
+               const uint64_t *param = NULL;
+               const struct orbis_libc_param *libc_param = NULL;
+               if (!sceKernelDlsym(modules[i], "sceKernelGetProcessType", &get_type) && get_type)
+                  process_type = ((int (*)(int))get_type)(-1);
+               if (!sceKernelDlsym(modules[i], "sceKernelGetProcParam", &get_param) && get_param)
+                  param = ((const uint64_t *(*)(void))get_param)();
+               if (param && param[0] >= 0x40)
+                  libc_param = (const struct orbis_libc_param *)(uintptr_t)param[7];
+               snprintf(line, sizeof(line), "[PS4 SHHEAP] process_type=%d kernel_libc_param=%p linked_libc_param=%p\n",
+                     process_type, (const void *)libc_param, (const void *)&_sceLibcParam);
                sceKernelDebugOutText(0, line);
             }
             if (strstr(info.name, "libSceLibcInternal"))
