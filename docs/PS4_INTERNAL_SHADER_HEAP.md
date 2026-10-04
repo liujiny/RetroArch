@@ -27,7 +27,7 @@ assumed to match other firmware. Private module/disassembly stay outside Git.
 
 Validation: `tests/orbis_shader/check_heap.py` checks the strong table,
 process pointer, mode, both capacities and unchanged slots in ELF, OELF and
-unencrypted fSELF. `test_probe.py` exercises allocator ownership, lookup and
+unencrypted fSELF. The historical allocator probe exercised allocator ownership, lookup and
 allocation failures, kernel parameter lookup and the diagnostic cap under
 ASan/UBSan. These checks do not prove the new allocation succeeds on PS4.
 
@@ -35,3 +35,10 @@ Hardware acceptance still required: S starts, system 16 MiB probe succeeds,
 Lottes/Mattias compile and repeatedly switch, Geom remains usable, games/core
 switching remain normal. A larger heap is finite; this is not a guarantee
 against all shader compiler bugs.
+
+## Source cleanup
+
+Temporary module enumeration, allocator stress probes and shader begin/end
+klog output have been removed. The process-local internal heap parameter
+table and shader binary-cache/error paths remain. Existing S/V packages
+retain their original binaries; this source cleanup does not modify them.
