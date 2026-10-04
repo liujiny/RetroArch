@@ -1364,7 +1364,11 @@
 
 /* Desired audio latency in milliseconds. Might not be honored
  * if driver can't provide given latency. */
-#if defined(ANDROID) || defined(RETROFW) || defined(MIYOO) || (defined(__EMSCRIPTEN__) && defined(HAVE_AL))
+#if defined(__PS4__)
+/* Keep a reserve across brief frame-time spikes. */
+#define DEFAULT_OUT_LATENCY 128
+#define DEFAULT_IN_LATENCY 64
+#elif defined(ANDROID) || defined(RETROFW) || defined(MIYOO) || (defined(__EMSCRIPTEN__) && defined(HAVE_AL))
 /* For most Android devices, 64ms is way too low. */
 #define DEFAULT_OUT_LATENCY 128
 #define DEFAULT_IN_LATENCY 128
@@ -1405,7 +1409,7 @@
 #endif
 
 /* Audio rate control. */
-#if !defined(RARCH_CONSOLE)
+#if !defined(RARCH_CONSOLE) || defined(__PS4__)
 #define DEFAULT_RATE_CONTROL true
 #else
 #define DEFAULT_RATE_CONTROL false

@@ -4243,12 +4243,16 @@ bool audio_driver_init_internal(void *settings_data, bool audio_cb_inited)
        * purpose - see audio_driver_pipe_target_frames() - on top of
        * the frames it holds for the pass; the setting says how much
        * that is, before the driver has said what it made of it. */
+      /* PS4 also primes a blocking stream with the device's reserve.
+       * A three-frame ring otherwise caps priming below the latency. */
+#ifndef __PS4__
       if (!settings->bools.audio_sync)
+#endif
       {
          size_t latency_frames = (size_t)(audio_driver_st.input * audio_latency / 1000.0);
          if (latency_frames < per_frame)
             latency_frames = per_frame;
-         frames       += latency_frames * 2;
+         frames       += latency_frames * (settings->bools.audio_sync ? 1 : 2);
       }
       audio_driver_st.pipe_float       = audio_driver_st.core_float;
       /* a multi-channel core's ring carries the canonical wide frame */
@@ -5341,6 +5345,37 @@ static size_t audio_driver_pipe_prime_frames(audio_driver_state_t *audio_st)
    target     += device;
    return target > limit ? limit : target;
 }
+
+#ifdef __PS4__
+static void audio_driver_ps4_check_underrun(audio_driver_state_t *st, int snap)
+{
+   size_t seen, previous;
+   const audio_driver_t *audio = st->current_audio;
+
+   if (!(snap & AUDIO_SNAP_SYNC) || !audio || !audio->underruns
+         || !st->context_audio_data)
+      return;
+
+   seen                   = audio->underruns(st->context_audio_data);
+   previous               = st->pipe_underruns_seen;
+   st->pipe_underruns_seen = seen;
+
+   /* Priming itself plays silence. Do not count that as another stall. */
+   if (st->pipe_priming || seen == previous
+         || (snap & (AUDIO_SNAP_PAUSED | AUDIO_SNAP_FASTMOTION
+               | AUDIO_SNAP_SLOWMOTION))
+         || retro_atomic_load_acquire_int(&st->core_silenced)
+         || !(AUDIO_FLAGS_GET(st) & AUDIO_FLAG_ACTIVE)
+         || !st->pipe_frame_bytes)
+      return;
+
+   /* At display speed the core cannot refill a drained queue on its own.
+    * Retain every source sample; rebuild the reserve once after a gap. */
+   if (retro_spsc_read_avail(&st->pipe_ring) / st->pipe_frame_bytes
+         < audio_driver_pipe_prime_frames(st))
+      st->pipe_priming = true;
+}
+#endif
 #endif
 
 /* Input and output do not overlap. Convert only the two populated slots. */
@@ -6224,6 +6259,9 @@ static void audio_driver_transport_consume(audio_driver_state_t *st)
       return;
    }
 
+#ifdef __PS4__
+   audio_driver_ps4_check_underrun(st, snap);
+#endif
    if (audio->underruns && !(snap & AUDIO_SNAP_SYNC))
    {
       size_t seen = audio->underruns(st->context_audio_data);
@@ -6254,6 +6292,9 @@ static void audio_driver_transport_consume(audio_driver_state_t *st)
       if (!audio_driver_transport_wait(st, need * st->pipe_frame_bytes,
                AUDIO_PIPELINE_LAYOUT_CAPACITY))
          return;
+#ifdef __PS4__
+      audio_driver_ps4_check_underrun(st, snap);
+#endif
       st->pipe_priming = false;
    }
    else if (!held && !st->pipe_pending_bytes
@@ -6349,6 +6390,11 @@ static void audio_driver_pipeline_consume(audio_driver_state_t *audio_st)
       return;
    }
 
+#ifdef __PS4__
+   snap = retro_atomic_load_acquire_int(&audio_st->runloop_snapshot);
+   audio_driver_ps4_check_underrun(audio_st, snap);
+#endif
+
    /* First wait: enough published audio for a pass. The producer
     * advances pipe_data_gen and notifies once per frame, not once per
     * publish - the paragraph on audio_driver_pipeline_consume() above
@@ -6428,6 +6474,10 @@ static void audio_driver_pipeline_consume(audio_driver_state_t *audio_st)
    if (!audio_st->pipe_priming)
       audio_driver_pipe_note_held(audio_st,
             retro_spsc_read_avail(&audio_st->pipe_ring) / audio_st->pipe_frame_bytes);
+#ifdef __PS4__
+   if (audio_st->pipe_priming)
+      audio_driver_ps4_check_underrun(audio_st, snap);
+#endif
    audio_st->pipe_priming = false;
    }
 

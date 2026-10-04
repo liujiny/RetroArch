@@ -181,6 +181,11 @@ static void ps4_audio_mainloop(void *data)
       retro_eventcount_notify(&ps4->park);
    }
 
+   /* The last submitted window still belongs to AudioOut. Retire it
+    * before stop/reinit can reuse or free the ring. */
+   sceAudioOutOutput(ps4->port, NULL);
+   retro_atomic_store_release_int(&ps4->read_pos, play_pos);
+
    return;
 }
 
@@ -259,11 +264,9 @@ static void ps4_audio_free(void *data)
       }
    }
    retro_eventcount_free(&ps4->park);
+   sceAudioOutClose(ps4->port);
    free(ps4->buffer_u32);
    ps4->worker_thread = NULL;
-
-   sceAudioOutClose(ps4->port);
-
    free(ps4);
 
 }
