@@ -5366,11 +5366,13 @@ static void audio_driver_ps4_check_underrun(audio_driver_state_t *st, int snap)
                | AUDIO_SNAP_SLOWMOTION))
          || retro_atomic_load_acquire_int(&st->core_silenced)
          || !(AUDIO_FLAGS_GET(st) & AUDIO_FLAG_ACTIVE)
+         || ((AUDIO_FLAGS_GET(st) & AUDIO_FLAG_CONTROL)
+               && st->rate_control_delta > 0.0f)
          || !st->pipe_frame_bytes)
       return;
 
-   /* At display speed the core cannot refill a drained queue on its own.
-    * Retain every source sample; rebuild the reserve once after a gap. */
+   /* Without rate control a display-paced core cannot rebuild its reserve.
+    * With it, let the controller refill without extending a short gap. */
    if (retro_spsc_read_avail(&st->pipe_ring) / st->pipe_frame_bytes
          < audio_driver_pipe_prime_frames(st))
       st->pipe_priming = true;

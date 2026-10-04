@@ -207,6 +207,15 @@ static void unit_cases(void)
    hardware_underruns++;
    audio_driver_ps4_check_underrun(&st, 0); /* Non-sync owner retains its event. */
    assert(!st.pipe_priming && st.pipe_underruns_seen != hardware_underruns);
+   AUDIO_FLAGS_SET(&st, AUDIO_FLAG_CONTROL);
+   hardware_underruns++;
+   audio_driver_ps4_check_underrun(&st, AUDIO_SNAP_SYNC);
+   assert(!st.pipe_priming); /* Live DRC refills without adding a silence gap. */
+   st.rate_control_delta = 0.0f;
+   hardware_underruns++;
+   audio_driver_ps4_check_underrun(&st, AUDIO_SNAP_SYNC);
+   assert(st.pipe_priming);
+   st.pipe_priming = false;
    st.context_audio_data = NULL;
    audio_driver_ps4_check_underrun(&st, AUDIO_SNAP_SYNC);
    assert(!st.pipe_priming);
